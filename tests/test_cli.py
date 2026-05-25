@@ -55,7 +55,7 @@ def _env_db(db_path):
 def test_version(runner):
     result = runner.invoke(main, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert "0.2.0" in result.output
 
 
 def test_scan(runner, git_repo, db_path):
@@ -65,14 +65,40 @@ def test_scan(runner, git_repo, db_path):
     assert "repos added" in result.output
 
 
+def test_scan_json(runner, git_repo, db_path):
+    parent = str(Path(git_repo).parent)
+    result = runner.invoke(main, ["--json", "scan", parent], env=_env_db(db_path))
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["added"] >= 1
+
+
 def test_list_empty(runner, db_path):
     result = runner.invoke(main, ["list"], env=_env_db(db_path))
     assert result.exit_code == 0
     assert "No repos tracked" in result.output
 
 
+def test_list_json(runner, db_path):
+    result = runner.invoke(main, ["--json", "list"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data == []
+
+
+def test_list_with_repos(runner, db_path):
+    data = {
+        "repos": {"test-repo": {"path": "/tmp/test", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": []}},
+        "tags": {},
+    }
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _save(data, db_path)
+    result = runner.invoke(main, ["list"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    assert "test-repo" in result.output
+
+
 def test_untrack(runner, db_path):
-    # Manually create a db entry
     data = {"repos": {"test": {"path": "/tmp/test", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": []}}, "tags": {}}
     db_path.parent.mkdir(parents=True, exist_ok=True)
     _save(data, db_path)
@@ -91,3 +117,68 @@ def test_dashboard_empty(runner, db_path):
     result = runner.invoke(main, ["dashboard"], env=_env_db(db_path))
     assert result.exit_code == 0
     assert "No repos tracked" in result.output
+
+
+def test_dashboard_json(runner, db_path):
+    result = runner.invoke(main, ["--json", "dashboard"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["total"] == 0
+
+
+def test_stale_json(runner, db_path):
+    result = runner.invoke(main, ["--json", "stale"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data == []
+
+
+def test_dirty_json(runner, db_path):
+    result = runner.invoke(main, ["--json", "dirty"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data == []
+
+
+def test_sizes_empty(runner, db_path):
+    result = runner.invoke(main, ["sizes"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    assert "No repos tracked" in result.output
+
+
+def test_prune_empty(runner, db_path):
+    result = runner.invoke(main, ["prune"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    assert "No repos tracked" in result.output
+
+
+def test_search_no_results(runner, db_path):
+    result = runner.invoke(main, ["search", "xyz"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    assert "No repos matching" in result.output
+
+
+def test_search_json(runner, db_path):
+    data = {
+        "repos": {"my-repo": {"path": "/tmp/my", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": ["python"]}},
+        "tags": {"python": ["my-repo"]},
+    }
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _save(data, db_path)
+    result = runner.invoke(main, ["--json", "search", "python"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    results = json.loads(result.output)
+    assert len(results) == 1
+    assert results[0]["match_type"] == "tag"
+
+
+def test_untag_command(runner, db_path):
+    data = {
+        "repos": {"r": {"path": "/tmp/r", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": ["work"]}},
+        "tags": {"work": ["r"]},
+    }
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _save(data, db_path)
+    result = runner.invoke(main, ["untag", "r", "work"], env=_env_db(db_path))
+    assert result.exit_code == 0
+    assert "Removed tag" in result.output

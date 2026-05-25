@@ -15,6 +15,7 @@ from gitshelf.db import (
     untag_repo,
     get_repos_by_tag,
     list_tags,
+    search_repos,
     _load,
     _save,
 )
@@ -84,6 +85,14 @@ def test_untag_repo(db_path):
     assert "work" not in get_repo("r", db_path)["tags"]
 
 
+def test_untag_cleans_empty_tags(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    tag_repo("r", "work", db_path)
+    untag_repo("r", "work", db_path)
+    tags = list_tags(db_path)
+    assert "work" not in tags
+
+
 def test_get_repos_by_tag(db_path):
     add_repo("r1", "/r1", db_path=db_path)
     add_repo("r2", "/r2", db_path=db_path)
@@ -113,3 +122,47 @@ def test_duplicate_tag_is_idempotent(db_path):
 def test_empty_db(db_path):
     assert list_repos(db_path) == {}
     assert list_tags(db_path) == {}
+
+
+def test_search_by_name(db_path):
+    add_repo("torchmetrics", "/tm", db_path=db_path)
+    add_repo("harper", "/hp", db_path=db_path)
+    results = search_repos("torch", db_path)
+    assert len(results) == 1
+    assert results[0]["name"] == "torchmetrics"
+    assert results[0]["match_type"] == "name"
+
+
+def test_search_by_path(db_path):
+    add_repo("repo1", "/home/user/projects/python", db_path=db_path)
+    results = search_repos("python", db_path)
+    assert len(results) == 1
+    assert results[0]["match_type"] == "path"
+
+
+def test_search_by_tag(db_path):
+    add_repo("r1", "/r1", db_path=db_path)
+    tag_repo("r1", "machine-learning", db_path)
+    results = search_repos("machine", db_path)
+    assert len(results) == 1
+    assert results[0]["match_type"] == "tag"
+
+
+def test_search_no_results(db_path):
+    add_repo("repo1", "/path", db_path=db_path)
+    results = search_repos("xyz123", db_path)
+    assert results == []
+
+
+def test_search_case_insensitive(db_path):
+    add_repo("MyRepo", "/mr", db_path=db_path)
+    results = search_repos("myrepo", db_path)
+    assert len(results) == 1
+
+
+def test_remove_repo_cleans_empty_tags(db_path):
+    add_repo("only", "/only", db_path=db_path)
+    tag_repo("only", "solo", db_path)
+    remove_repo("only", db_path)
+    tags = list_tags(db_path)
+    assert "solo" not in tags

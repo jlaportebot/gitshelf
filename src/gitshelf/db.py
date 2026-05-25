@@ -63,6 +63,8 @@ def remove_repo(name: str, db_path: Path | None = None) -> bool:
     for tag_repos in data.get("tags", {}).values():
         if name in tag_repos:
             tag_repos.remove(name)
+    # Clean up empty tag entries
+    data["tags"] = {k: v for k, v in data.get("tags", {}).items() if v}
     _save(data, db_path)
     return True
 
@@ -101,6 +103,8 @@ def untag_repo(name: str, tag: str, db_path: Path | None = None) -> None:
     repo = data["repos"].get(name, {})
     if tag in repo.get("tags", []):
         repo["tags"].remove(tag)
+    # Clean up empty tag entries
+    data["tags"] = {k: v for k, v in data.get("tags", {}).items() if v}
     _save(data, db_path)
 
 
@@ -122,3 +126,20 @@ def list_tags(db_path: Path | None = None) -> dict[str, list[str]]:
     """Return all tags and their repos."""
     data = _load(db_path)
     return data.get("tags", {})
+
+
+def search_repos(query: str, db_path: Path | None = None) -> list[dict[str, Any]]:
+    """Search repos by name, path, or tag. Returns list of matches with match_type."""
+    data = _load(db_path)
+    query_lower = query.lower()
+    results = []
+
+    for name, info in data.get("repos", {}).items():
+        if query_lower in name.lower():
+            results.append({**info, "name": name, "match_type": "name"})
+        elif query_lower in info.get("path", "").lower():
+            results.append({**info, "name": name, "match_type": "path"})
+        elif any(query_lower in t.lower() for t in info.get("tags", [])):
+            results.append({**info, "name": name, "match_type": "tag"})
+
+    return results

@@ -88,6 +88,75 @@ def get_branch_count(repo_path: str) -> int:
     return len(result.splitlines())
 
 
+def get_local_branches(repo_path: str) -> list[str]:
+    """Get list of local branch names."""
+    result = _run_git(["branch", "--format=%(refname:short)"], repo_path)
+    if result is None:
+        return []
+    return [b.strip() for b in result.splitlines() if b.strip()]
+
+
+def get_stale_branches(repo_path: str, days: int = 90) -> list[dict[str, Any]]:
+    """Get branches with no activity in the last N days."""
+    branches = get_local_branches(repo_path)
+    stale = []
+    for branch in branches:
+        date_str = _run_git(
+            ["log", "-1", f"--format=%cI", branch], repo_path
+        )
+        if date_str:
+            try:
+                last_date = datetime.fromisoformat(date_str)
+                days_idle = (datetime.now(last_date.tzinfo) - last_date).days
+                if days_idle > days:
+                    stale.append({"branch": branch, "days_idle": days_idle})
+            except (ValueError, TypeError):
+                pass
+    return stale
+
+
+def get_repo_size(repo_path: str) -> int:
+    """Get the total size of the repo directory in bytes."""
+    total = 0
+    for dirpath, _dirnames, filenames in os.walk(repo_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            try:
+                total += os.path.getsize(fp)
+            except OSError:
+                pass
+    return total
+
+
+def get_commit_count(repo_path: str) -> int:
+    """Get the total number of commits on the current branch."""
+    result = _run_git(["rev-list", "--count", "HEAD"], repo_path)
+    if result:
+        try:
+            return int(result)
+        except ValueError:
+            pass
+    return 0
+
+
+def get_contributors(repo_path: str) -> list[dict[str, Any]]:
+    """Get top contributors by commit count."""
+    result = _run_git(
+        ["shortlog", "-sn", "HEAD"], repo_path
+    )
+    if result is None:
+        return []
+    contributors = []
+    for line in result.splitlines():
+        parts = line.strip().split("\t", 1)
+        if len(parts) == 2:
+            contributors.append({
+                "name": parts[1],
+                "commits": int(parts[0]),
+            })
+    return contributors
+
+
 def get_repo_name(repo_path: str) -> str:
     """Extract repo name from path or remote URL."""
     # Try remote URL first
@@ -102,26 +171,44 @@ def get_repo_name(repo_path: str) -> str:
     return os.path.basename(os.path.abspath(repo_path))
 
 
-def scan_directory(directory: str) -> list[dict[str, Any]]:
-    """Scan a directory for git repositories (one level deep)."""
+def scan_directory(directory: str, deep: bool = False) -> list[dict[str, Any]]:
+    """Scan a directory for git repositories.
+
+    Args:
+        directory: Path to scan.
+        deep: If True, scan two levels deep instead of one.
+    """
     repos: list[dict[str, Any]] = []
     base = Path(directory).expanduser().resolve()
 
     if not base.is_dir():
         return repos
 
-    for entry in base.iterdir():
+    def _check_dir(entry: Path) -> dict[str, Any] | None:
         if entry.is_dir() and is_git_repo(str(entry)):
             path = str(entry)
             name = get_repo_name(path)
-            repos.append({
+            return {
                 "name": name,
                 "path": path,
                 "remote_url": get_remote_url(path),
                 "branch": get_current_branch(path),
                 "dirty": has_uncommitted_changes(path),
                 "last_commit": get_last_commit_date(path),
-            })
+            }
+        return None
+
+    for entry in base.iterdir():
+        repo_info = _check_dir(entry)
+        if repo_info:
+            repos.append(repo_info)
+            continue
+        # If deep, also check subdirectories
+        if deep and entry.is_dir() and not entry.name.startswith("."):
+            for sub in entry.iterdir():
+                repo_info = _check_dir(sub)
+                if repo_info:
+                    repos.append(repo_info)
 
     return repos
 
@@ -136,4 +223,23 @@ def get_health_report(repo_path: str) -> dict[str, Any]:
         "stashes": get_stash_count(repo_path),
         "branches": get_branch_count(repo_path),
         "last_commit": get_last_commit_date(repo_path),
+    }
+
+
+def get_summary(repo_path: str) -> dict[str, Any]:
+    """Generate a detailed summary for a repository."""
+    return {
+        "path": repo_path,
+        "branch": get_current_branch(repo_path),
+        "remote_url": get_remote_url(repo_path),
+        "dirty": has_uncommitted_changes(repo_path),
+        "unpushed": has_unpushed_commits(repo_path),
+        "stashes": get_stash_count(repo_path),
+        "branches": get_branch_count(repo_path),
+        "local_branches": get_local_branches(repo_path),
+        "stale_branches": get_stale_branches(repo_path),
+        "last_commit": get_last_commit_date(repo_path),
+        "commit_count": get_commit_count(repo_path),
+        "contributors": get_contributors(repo_path),
+        "size_bytes": get_repo_size(repo_path),
     }
