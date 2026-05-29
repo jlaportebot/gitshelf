@@ -22,9 +22,13 @@ def _load(db_path: Path | None = None) -> dict[str, Any]:
     if db_path is None:
         db_path = _default_db_path()
     if not db_path.exists():
-        return {"repos": {}, "tags": {}}
+        return {"repos": {}, "tags": {}, "ignore_patterns": [], "notes": {}}
     with open(db_path) as f:
-        return json.load(f)
+        data = json.load(f)
+    # Ensure backward compatibility with old DB format
+    data.setdefault("ignore_patterns", [])
+    data.setdefault("notes", {})
+    return data
 
 
 def _save(data: dict[str, Any], db_path: Path | None = None) -> None:
@@ -49,6 +53,7 @@ def add_repo(
         "added_at": _now(),
         "last_accessed": _now(),
         "tags": [],
+        "archived": False,
     }
     _save(data, db_path)
 
@@ -65,6 +70,8 @@ def remove_repo(name: str, db_path: Path | None = None) -> bool:
             tag_repos.remove(name)
     # Clean up empty tag entries
     data["tags"] = {k: v for k, v in data.get("tags", {}).items() if v}
+    # Clean up notes
+    data.get("notes", {}).pop(name, None)
     _save(data, db_path)
     return True
 
@@ -75,10 +82,16 @@ def get_repo(name: str, db_path: Path | None = None) -> dict[str, Any] | None:
     return data["repos"].get(name)
 
 
-def list_repos(db_path: Path | None = None) -> dict[str, dict[str, Any]]:
+def list_repos(
+    db_path: Path | None = None,
+    include_archived: bool = True,
+) -> dict[str, dict[str, Any]]:
     """Return all tracked repos."""
     data = _load(db_path)
-    return data.get("repos", {})
+    repos = data.get("repos", {})
+    if not include_archived:
+        repos = {k: v for k, v in repos.items() if not v.get("archived", False)}
+    return repos
 
 
 def tag_repo(name: str, tag: str, db_path: Path | None = None) -> None:
@@ -143,3 +156,112 @@ def search_repos(query: str, db_path: Path | None = None) -> list[dict[str, Any]
             results.append({**info, "name": name, "match_type": "tag"})
 
     return results
+
+
+# --- Ignore patterns ---
+
+def add_ignore_pattern(pattern: str, db_path: Path | None = None) -> None:
+    """Add a name pattern to the ignore list (glob-style)."""
+    data = _load(db_path)
+    patterns = data.setdefault("ignore_patterns", [])
+    if pattern not in patterns:
+        patterns.append(pattern)
+        _save(data, db_path)
+
+
+def remove_ignore_pattern(pattern: str, db_path: Path | None = None) -> bool:
+    """Remove a name pattern from the ignore list. Returns True if found."""
+    data = _load(db_path)
+    patterns = data.get("ignore_patterns", [])
+    if pattern in patterns:
+        patterns.remove(pattern)
+        _save(data, db_path)
+        return True
+    return False
+
+
+def list_ignore_patterns(db_path: Path | None = None) -> list[str]:
+    """Return all ignore patterns."""
+    data = _load(db_path)
+    return data.get("ignore_patterns", [])
+
+
+def is_ignored(name: str, db_path: Path | None = None) -> bool:
+    """Check if a repo name matches any ignore pattern (fnmatch)."""
+    import fnmatch
+    patterns = list_ignore_patterns(db_path)
+    return any(fnmatch.fnmatch(name, p) for p in patterns)
+
+
+# --- Notes ---
+
+def set_note(name: str, note: str, db_path: Path | None = None) -> None:
+    """Set a note for a repo."""
+    data = _load(db_path)
+    if name not in data["repos"]:
+        raise ValueError(f"Repo '{name}' not found")
+    data.setdefault("notes", {})[name] = note
+    _save(data, db_path)
+
+
+def get_note(name: str, db_path: Path | None = None) -> str | None:
+    """Get the note for a repo, or None."""
+    data = _load(db_path)
+    return data.get("notes", {}).get(name)
+
+
+def remove_note(name: str, db_path: Path | None = None) -> bool:
+    """Remove a note for a repo. Returns True if found."""
+    data = _load(db_path)
+    notes = data.get("notes", {})
+    if name in notes:
+        del notes[name]
+        _save(data, db_path)
+        return True
+    return False
+
+
+def list_notes(db_path: Path | None = None) -> dict[str, str]:
+    """Return all repo notes."""
+    data = _load(db_path)
+    return data.get("notes", {})
+
+
+# --- Archive ---
+
+def archive_repo(name: str, db_path: Path | None = None) -> None:
+    """Mark a repo as archived."""
+    data = _load(db_path)
+    if name not in data["repos"]:
+        raise ValueError(f"Repo '{name}' not found")
+    data["repos"][name]["archived"] = True
+    _save(data, db_path)
+
+
+def unarchive_repo(name: str, db_path: Path | None = None) -> None:
+    """Unmark a repo as archived."""
+    data = _load(db_path)
+    if name not in data["repos"]:
+        raise ValueError(f"Repo '{name}' not found")
+    data["repos"][name]["archived"] = False
+    _save(data, db_path)
+
+
+# --- Sync / Reconcile helpers ---
+
+def update_repo_path(name: str, new_path: str, db_path: Path | None = None) -> None:
+    """Update the path for a tracked repo."""
+    data = _load(db_path)
+    if name not in data["repos"]:
+        raise ValueError(f"Repo '{name}' not found")
+    data["repos"][name]["path"] = new_path
+    _save(data, db_path)
+
+
+def update_repo_remote(name: str, remote_url: str | None, db_path: Path | None = None) -> None:
+    """Update the remote URL for a tracked repo."""
+    data = _load(db_path)
+    if name not in data["repos"]:
+        raise ValueError(f"Repo '{name}' not found")
+    data["repos"][name]["remote_url"] = remote_url
+    _save(data, db_path)
