@@ -243,3 +243,72 @@ def get_summary(repo_path: str) -> dict[str, Any]:
         "contributors": get_contributors(repo_path),
         "size_bytes": get_repo_size(repo_path),
     }
+
+
+def get_worktree_status(repo_path: str) -> dict[str, Any] | None:
+    """Get worktree status: list of worktrees for a repo.
+
+    Returns list of dicts with 'path' and 'branch' keys, or None on error.
+    """
+    result = _run_git(["worktree", "list", "--porcelain"], repo_path)
+    if result is None:
+        return None
+    worktrees = []
+    current: dict[str, str] = {}
+    for line in result.splitlines():
+        if " " in line:
+            key, value = line.split(" ", 1)
+            if key == "worktree":
+                current["path"] = value
+            elif key == "branch":
+                current["branch"] = value
+        elif line == "" and current:
+            worktrees.append(current)
+            current = {}
+    if current:
+        worktrees.append(current)
+    return {"worktrees": worktrees, "count": len(worktrees)}
+
+
+def get_recent_commits(repo_path: str, count: int = 5) -> list[dict[str, str]]:
+    """Get recent commits with hash, author, date, and subject."""
+    fmt = "%H|%an|%aI|%s"
+    result = _run_git(["log", f"-{count}", f"--format={fmt}"], repo_path)
+    if result is None:
+        return []
+    commits = []
+    for line in result.splitlines():
+        parts = line.split("|", 3)
+        if len(parts) == 4:
+            commits.append({
+                "hash": parts[0],
+                "author": parts[1],
+                "date": parts[2],
+                "subject": parts[3],
+            })
+    return commits
+
+
+def get_remote_branches(repo_path: str) -> list[str]:
+    """Get list of remote branch names (without remote prefix)."""
+    result = _run_git(["branch", "-r", "--format=%(refname:short)"], repo_path)
+    if result is None:
+        return []
+    return [b.strip() for b in result.splitlines() if b.strip() and "HEAD" not in b]
+
+
+def has_diverged(repo_path: str) -> bool:
+    """Check if local branch has diverged from its upstream."""
+    branch = get_current_branch(repo_path)
+    if not branch or branch == "HEAD":
+        return False
+    upstream = _run_git(["rev-parse", "--abbrev-ref", "@{upstream}"], repo_path)
+    if upstream is None:
+        return False
+    # Check for both ahead and behind
+    ahead = _run_git(["rev-list", "--count", f"@{{upstream}}..HEAD"], repo_path)
+    behind = _run_git(["rev-list", "--count", f"HEAD..@{{upstream}}"], repo_path)
+    try:
+        return int(ahead or "0") > 0 and int(behind or "0") > 0
+    except ValueError:
+        return False

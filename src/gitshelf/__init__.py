@@ -1,3 +1,3 @@
-"""gitshelf - CLI tool for managing local git repositories like a bookshelf."""
+"""gitshelf — Manage your local git repos like a bookshelf."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

@@ -18,6 +18,18 @@ from gitshelf.db import (
     search_repos,
     _load,
     _save,
+    add_ignore_pattern,
+    remove_ignore_pattern,
+    list_ignore_patterns,
+    is_ignored,
+    set_note,
+    get_note,
+    remove_note,
+    list_notes,
+    archive_repo,
+    unarchive_repo,
+    update_repo_path,
+    update_repo_remote,
 )
 
 
@@ -38,6 +50,12 @@ def test_add_repo_no_remote(db_path):
     add_repo("local-repo", "/tmp/local", db_path=db_path)
     repo = get_repo("local-repo", db_path)
     assert repo["remote_url"] is None
+
+
+def test_add_repo_default_archived_false(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    repo = get_repo("r", db_path)
+    assert repo["archived"] is False
 
 
 def test_remove_repo(db_path):
@@ -61,6 +79,15 @@ def test_list_repos(db_path):
     assert len(repos) == 2
     assert "a" in repos
     assert "b" in repos
+
+
+def test_list_repos_exclude_archived(db_path):
+    add_repo("active", "/active", db_path=db_path)
+    add_repo("archived-one", "/arch", db_path=db_path)
+    archive_repo("archived-one", db_path)
+    repos = list_repos(db_path, include_archived=False)
+    assert len(repos) == 1
+    assert "active" in repos
 
 
 def test_tag_repo(db_path):
@@ -166,3 +193,165 @@ def test_remove_repo_cleans_empty_tags(db_path):
     remove_repo("only", db_path)
     tags = list_tags(db_path)
     assert "solo" not in tags
+
+
+# --- Ignore patterns ---
+
+
+def test_add_ignore_pattern(db_path):
+    add_ignore_pattern("test-*", db_path)
+    patterns = list_ignore_patterns(db_path)
+    assert "test-*" in patterns
+
+
+def test_add_ignore_pattern_no_duplicate(db_path):
+    add_ignore_pattern("x", db_path)
+    add_ignore_pattern("x", db_path)
+    assert list_ignore_patterns(db_path).count("x") == 1
+
+
+def test_remove_ignore_pattern(db_path):
+    add_ignore_pattern("to-remove", db_path)
+    assert remove_ignore_pattern("to-remove", db_path) is True
+    assert "to-remove" not in list_ignore_patterns(db_path)
+
+
+def test_remove_ignore_pattern_not_found(db_path):
+    assert remove_ignore_pattern("nonexistent", db_path) is False
+
+
+def test_is_ignored_simple(db_path):
+    add_ignore_pattern("test-*", db_path)
+    assert is_ignored("test-repo", db_path) is True
+    assert is_ignored("prod-repo", db_path) is False
+
+
+def test_is_ignored_exact_match(db_path):
+    add_ignore_pattern("dotfiles", db_path)
+    assert is_ignored("dotfiles", db_path) is True
+    assert is_ignored("my-dotfiles", db_path) is False
+
+
+def test_list_ignore_patterns_empty(db_path):
+    assert list_ignore_patterns(db_path) == []
+
+
+# --- Notes ---
+
+
+def test_set_note(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    set_note("r", "This is a work project", db_path)
+    assert get_note("r", db_path) == "This is a work project"
+
+
+def test_set_note_nonexistent_repo(db_path):
+    with pytest.raises(ValueError, match="not found"):
+        set_note("ghost", "note", db_path)
+
+
+def test_get_note_not_set(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    assert get_note("r", db_path) is None
+
+
+def test_remove_note(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    set_note("r", "note", db_path)
+    assert remove_note("r", db_path) is True
+    assert get_note("r", db_path) is None
+
+
+def test_remove_note_not_found(db_path):
+    assert remove_note("nope", db_path) is False
+
+
+def test_list_notes(db_path):
+    add_repo("a", "/a", db_path=db_path)
+    add_repo("b", "/b", db_path=db_path)
+    set_note("a", "note a", db_path)
+    set_note("b", "note b", db_path)
+    notes = list_notes(db_path)
+    assert len(notes) == 2
+    assert notes["a"] == "note a"
+
+
+def test_list_notes_empty(db_path):
+    assert list_notes(db_path) == {}
+
+
+def test_remove_repo_cleans_note(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    set_note("r", "will be removed", db_path)
+    remove_repo("r", db_path)
+    assert list_notes(db_path).get("r") is None
+
+
+# --- Archive ---
+
+
+def test_archive_repo(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    archive_repo("r", db_path)
+    repo = get_repo("r", db_path)
+    assert repo["archived"] is True
+
+
+def test_archive_nonexistent_repo(db_path):
+    with pytest.raises(ValueError, match="not found"):
+        archive_repo("ghost", db_path)
+
+
+def test_unarchive_repo(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    archive_repo("r", db_path)
+    unarchive_repo("r", db_path)
+    repo = get_repo("r", db_path)
+    assert repo["archived"] is False
+
+
+def test_unarchive_nonexistent_repo(db_path):
+    with pytest.raises(ValueError, match="not found"):
+        unarchive_repo("ghost", db_path)
+
+
+# --- Update helpers ---
+
+
+def test_update_repo_path(db_path):
+    add_repo("r", "/old/path", db_path=db_path)
+    update_repo_path("r", "/new/path", db_path)
+    repo = get_repo("r", db_path)
+    assert repo["path"] == "/new/path"
+
+
+def test_update_repo_path_nonexistent(db_path):
+    with pytest.raises(ValueError, match="not found"):
+        update_repo_path("ghost", "/path", db_path)
+
+
+def test_update_repo_remote(db_path):
+    add_repo("r", "/r", db_path=db_path)
+    update_repo_remote("r", "https://github.com/new/repo.git", db_path)
+    repo = get_repo("r", db_path)
+    assert repo["remote_url"] == "https://github.com/new/repo.git"
+
+
+def test_update_repo_remote_nonexistent(db_path):
+    with pytest.raises(ValueError, match="not found"):
+        update_repo_remote("ghost", "url", db_path)
+
+
+# --- Backward compat ---
+
+
+def test_load_old_format_db(tmp_path):
+    """Ensure loading a DB without ignore_patterns or notes keys still works."""
+    db_path = tmp_path / "old_db.json"
+    data = {"repos": {"r": {"path": "/r", "tags": []}}, "tags": {}}
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(db_path, "w") as f:
+        json.dump(data, f)
+    loaded = _load(db_path)
+    assert "ignore_patterns" in loaded
+    assert "notes" in loaded

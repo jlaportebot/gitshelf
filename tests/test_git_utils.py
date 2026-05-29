@@ -23,6 +23,10 @@ from gitshelf.git_utils import (
     get_contributors,
     get_repo_size,
     scan_directory,
+    get_worktree_status,
+    get_recent_commits,
+    get_remote_branches,
+    has_diverged,
 )
 
 
@@ -219,3 +223,49 @@ def test_scan_directory_deep(tmp_path):
 def test_scan_nonexistent_directory():
     repos = scan_directory("/nonexistent/path/12345")
     assert repos == []
+
+
+# --- New v0.3.0 utility tests ---
+
+
+def test_get_worktree_status(git_repo):
+    result = get_worktree_status(git_repo)
+    assert result is not None
+    assert "worktrees" in result
+    assert "count" in result
+    assert result["count"] >= 1
+
+
+def test_get_recent_commits(git_repo):
+    commits = get_recent_commits(git_repo, count=5)
+    assert len(commits) >= 1
+    assert commits[0]["hash"]
+    assert commits[0]["author"]
+    assert commits[0]["subject"]
+
+
+def test_get_recent_commits_multi(git_repo_multi_commit):
+    commits = get_recent_commits(git_repo_multi_commit, count=3)
+    assert len(commits) == 3
+    # Most recent first
+    assert "commit 2" in commits[0]["subject"]
+
+
+def test_get_recent_commits_not_repo(tmp_path):
+    commits = get_recent_commits(str(tmp_path), count=5)
+    assert commits == []
+
+
+def test_get_remote_branches_no_remote(git_repo):
+    branches = get_remote_branches(git_repo)
+    # No remotes set up, so should be empty
+    assert branches == []
+
+
+def test_has_diverged_no_remote(git_repo):
+    # No upstream, so no divergence
+    assert has_diverged(git_repo) is False
+
+
+def test_has_diverged_not_repo(tmp_path):
+    assert has_diverged(str(tmp_path)) is False
