@@ -1,8 +1,6 @@
 """Tests for gitshelf database operations."""
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -17,7 +15,6 @@ from gitshelf.db import (
     list_tags,
     search_repos,
     _load,
-    _save,
     add_ignore_pattern,
     remove_ignore_pattern,
     list_ignore_patterns,
@@ -39,7 +36,9 @@ def db_path(tmp_path):
 
 
 def test_add_repo(db_path):
-    add_repo("my-repo", "/home/user/my-repo", "https://github.com/user/my-repo.git", db_path)
+    add_repo(
+        "my-repo", "/home/user/my-repo", "https://github.com/user/my-repo.git", db_path
+    )
     repo = get_repo("my-repo", db_path)
     assert repo is not None
     assert repo["path"] == "/home/user/my-repo"

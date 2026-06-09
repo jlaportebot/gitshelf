@@ -12,7 +12,6 @@ import click
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
 from gitshelf import __version__
@@ -47,9 +46,7 @@ from gitshelf.git_utils import (
     has_uncommitted_changes,
     get_last_commit_date,
     get_repo_size,
-    get_current_branch,
     get_remote_url,
-    get_worktree_status,
     get_recent_commits,
     has_diverged,
 )
@@ -68,7 +65,9 @@ def _format_size(size_bytes: int) -> str:
 
 @click.group()
 @click.version_option(__version__)
-@click.option("--json-output", "--json", "json_output", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_output", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def main(ctx: click.Context, json_output: bool) -> None:
     """gitshelf 📚 — Manage your local git repos like a bookshelf."""
@@ -85,7 +84,9 @@ def scan(ctx: click.Context, directory: str, deep: bool) -> None:
     repos = scan_directory(directory, deep=deep)
     if not repos:
         if ctx.obj["json"]:
-            click.echo(json.dumps({"added": 0, "skipped": 0, "ignored": 0, "repos": []}))
+            click.echo(
+                json.dumps({"added": 0, "skipped": 0, "ignored": 0, "repos": []})
+            )
         else:
             console.print(f"[yellow]No git repos found in {directory}[/yellow]")
         return
@@ -107,7 +108,16 @@ def scan(ctx: click.Context, directory: str, deep: bool) -> None:
         added += 1
 
     if ctx.obj["json"]:
-        click.echo(json.dumps({"added": added, "skipped": skipped, "ignored": ignored, "repos": added_repos}))
+        click.echo(
+            json.dumps(
+                {
+                    "added": added,
+                    "skipped": skipped,
+                    "ignored": ignored,
+                    "repos": added_repos,
+                }
+            )
+        )
     else:
         parts = [f"{added} repos added"]
         if skipped:
@@ -122,9 +132,18 @@ def scan(ctx: click.Context, directory: str, deep: bool) -> None:
 @click.option("--dirty", is_flag=True, help="Show only repos with uncommitted changes.")
 @click.option("--archived", is_flag=True, help="Show only archived repos.")
 @click.option("--all", "show_all", is_flag=True, help="Show archived repos too.")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
-def list_cmd(ctx: click.Context, tag: str | None, dirty: bool, archived: bool, show_all: bool, json_flag: bool) -> None:
+def list_cmd(
+    ctx: click.Context,
+    tag: str | None,
+    dirty: bool,
+    archived: bool,
+    show_all: bool,
+    json_flag: bool,
+) -> None:
     """List all tracked repos."""
     use_json = ctx.obj.get("json") or json_flag
     include_archived = show_all or archived
@@ -133,7 +152,9 @@ def list_cmd(ctx: click.Context, tag: str | None, dirty: bool, archived: bool, s
         if use_json:
             click.echo(json.dumps([]))
         else:
-            console.print("[yellow]No repos tracked. Use 'gitshelf scan' to add some.[/yellow]")
+            console.print(
+                "[yellow]No repos tracked. Use 'gitshelf scan' to add some.[/yellow]"
+            )
         return
 
     if tag:
@@ -146,17 +167,21 @@ def list_cmd(ctx: click.Context, tag: str | None, dirty: bool, archived: bool, s
         if archived and not is_archived:
             continue
         repo_path = info["path"]
-        is_dirty = has_uncommitted_changes(repo_path) if is_git_repo(repo_path) else False
+        is_dirty = (
+            has_uncommitted_changes(repo_path) if is_git_repo(repo_path) else False
+        )
         if dirty and not is_dirty:
             continue
-        result.append({
-            "name": name,
-            "path": repo_path,
-            "tags": info.get("tags", []),
-            "dirty": is_dirty,
-            "archived": is_archived,
-            "added_at": info.get("added_at", ""),
-        })
+        result.append(
+            {
+                "name": name,
+                "path": repo_path,
+                "tags": info.get("tags", []),
+                "dirty": is_dirty,
+                "archived": is_archived,
+                "added_at": info.get("added_at", ""),
+            }
+        )
 
     if use_json:
         click.echo(json.dumps(result, indent=2, default=str))
@@ -173,7 +198,9 @@ def list_cmd(ctx: click.Context, tag: str | None, dirty: bool, archived: bool, s
         archived_mark = " [dim](archived)[/dim]" if r["archived"] else ""
         tags_str = ", ".join(r["tags"])
         added = r["added_at"][:10] if r["added_at"] else ""
-        table.add_row(f"{r['name']}{dirty_mark}{archived_mark}", r["path"], tags_str, added)
+        table.add_row(
+            f"{r['name']}{dirty_mark}{archived_mark}", r["path"], tags_str, added
+        )
 
     console.print(table)
 
@@ -203,7 +230,9 @@ def untag(name: str, tags: tuple[str, ...]) -> None:
 
 @main.command()
 @click.argument("name")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def health(ctx: click.Context, name: str, json_flag: bool) -> None:
     """Show a health report for a repo."""
@@ -222,26 +251,38 @@ def health(ctx: click.Context, name: str, json_flag: bool) -> None:
     panel_content = []
     panel_content.append(f"[cyan]Path:[/cyan] {report['path']}")
     panel_content.append(f"[cyan]Branch:[/cyan] {report['branch'] or 'detached'}")
-    panel_content.append(f"[cyan]Dirty:[/cyan] {'[red]Yes[/red]' if report['dirty'] else '[green]No[/green]'}")
-    panel_content.append(f"[cyan]Unpushed:[/cyan] {'[yellow]Yes[/yellow]' if report['unpushed'] else '[green]No[/green]'}")
+    panel_content.append(
+        f"[cyan]Dirty:[/cyan] {'[red]Yes[/red]' if report['dirty'] else '[green]No[/green]'}"
+    )
+    panel_content.append(
+        f"[cyan]Unpushed:[/cyan] {'[yellow]Yes[/yellow]' if report['unpushed'] else '[green]No[/green]'}"
+    )
     panel_content.append(f"[cyan]Stashes:[/cyan] {report['stashes']}")
     panel_content.append(f"[cyan]Branches:[/cyan] {report['branches']}")
     lc = report["last_commit"]
-    panel_content.append(f"[cyan]Last commit:[/cyan] {lc.strftime('%Y-%m-%d %H:%M') if lc else 'N/A'}")
+    panel_content.append(
+        f"[cyan]Last commit:[/cyan] {lc.strftime('%Y-%m-%d %H:%M') if lc else 'N/A'}"
+    )
 
     # Diverged status
     try:
         if has_diverged(repo["path"]):
-            panel_content.append("[yellow]Diverged:[/yellow] Yes (ahead and behind upstream)")
+            panel_content.append(
+                "[yellow]Diverged:[/yellow] Yes (ahead and behind upstream)"
+            )
     except Exception:
         pass
 
-    console.print(Panel("\n".join(panel_content), title=f"🏥 {name}", border_style="blue"))
+    console.print(
+        Panel("\n".join(panel_content), title=f"🏥 {name}", border_style="blue")
+    )
 
 
 @main.command()
 @click.argument("name")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def summary(ctx: click.Context, name: str, json_flag: bool) -> None:
     """Show a detailed summary for a repo."""
@@ -265,15 +306,21 @@ def summary(ctx: click.Context, name: str, json_flag: bool) -> None:
     panel_content.append(f"[cyan]Branch:[/cyan] {data['branch'] or 'detached'}")
     panel_content.append(f"[cyan]Remote:[/cyan] {data['remote_url'] or 'none'}")
     panel_content.append(f"[cyan]Commits:[/cyan] {data['commit_count']}")
-    panel_content.append(f"[cyan]Dirty:[/cyan] {'[red]Yes[/red]' if data['dirty'] else '[green]No[/green]'}")
-    panel_content.append(f"[cyan]Unpushed:[/cyan] {'[yellow]Yes[/yellow]' if data['unpushed'] else '[green]No[/green]'}")
+    panel_content.append(
+        f"[cyan]Dirty:[/cyan] {'[red]Yes[/red]' if data['dirty'] else '[green]No[/green]'}"
+    )
+    panel_content.append(
+        f"[cyan]Unpushed:[/cyan] {'[yellow]Yes[/yellow]' if data['unpushed'] else '[green]No[/green]'}"
+    )
     panel_content.append(f"[cyan]Stashes:[/cyan] {data['stashes']}")
     panel_content.append(f"[cyan]Branches:[/cyan] {data['branches']} local")
     panel_content.append(f"[cyan]Size:[/cyan] {_format_size(data['size_bytes'])}")
     if repo.get("archived"):
         panel_content.append("[dim]Archived: Yes[/dim]")
     lc = data["last_commit"]
-    panel_content.append(f"[cyan]Last commit:[/cyan] {lc.strftime('%Y-%m-%d %H:%M') if lc else 'N/A'}")
+    panel_content.append(
+        f"[cyan]Last commit:[/cyan] {lc.strftime('%Y-%m-%d %H:%M') if lc else 'N/A'}"
+    )
 
     if note_text:
         panel_content.append(f"[cyan]Note:[/cyan] {note_text}")
@@ -287,12 +334,16 @@ def summary(ctx: click.Context, name: str, json_flag: bool) -> None:
         contrib_str = ", ".join(f"{c['name']} ({c['commits']})" for c in top)
         panel_content.append(f"[cyan]Top contributors:[/cyan] {contrib_str}")
 
-    console.print(Panel("\n".join(panel_content), title=f"📊 {name}", border_style="blue"))
+    console.print(
+        Panel("\n".join(panel_content), title=f"📊 {name}", border_style="blue")
+    )
 
 
 @main.command()
 @click.option("--days", default=30, help="Number of days to consider stale.")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def stale(ctx: click.Context, days: int, json_flag: bool) -> None:
     """Show repos with no recent activity."""
@@ -314,7 +365,13 @@ def stale(ctx: click.Context, days: int, json_flag: bool) -> None:
             lc_naive = lc.replace(tzinfo=None) if lc.tzinfo else lc
             if lc_naive < threshold:
                 delta = (datetime.now() - lc_naive).days
-                stale_repos.append({"name": name, "last_commit": lc_naive.isoformat(), "days_idle": delta})
+                stale_repos.append(
+                    {
+                        "name": name,
+                        "last_commit": lc_naive.isoformat(),
+                        "days_idle": delta,
+                    }
+                )
         elif not lc:
             stale_repos.append({"name": name, "last_commit": None, "days_idle": None})
 
@@ -337,7 +394,9 @@ def stale(ctx: click.Context, days: int, json_flag: bool) -> None:
 
 
 @main.command()
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def dirty(ctx: click.Context, json_flag: bool) -> None:
     """Show repos with uncommitted changes."""
@@ -371,7 +430,9 @@ def dirty(ctx: click.Context, json_flag: bool) -> None:
 
 
 @main.command()
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def dashboard(ctx: click.Context, json_flag: bool) -> None:
     """Show a summary dashboard of all repos."""
@@ -381,7 +442,9 @@ def dashboard(ctx: click.Context, json_flag: bool) -> None:
         if use_json:
             click.echo(json.dumps({"total": 0}))
         else:
-            console.print("[yellow]No repos tracked. Use 'gitshelf scan' to add some.[/yellow]")
+            console.print(
+                "[yellow]No repos tracked. Use 'gitshelf scan' to add some.[/yellow]"
+            )
         return
 
     total = len(repos)
@@ -406,6 +469,7 @@ def dashboard(ctx: click.Context, json_flag: bool) -> None:
                 if lc_naive < threshold:
                     stale_count += 1
             from gitshelf.git_utils import has_unpushed_commits
+
             if has_unpushed_commits(path):
                 unpushed_count += 1
             try:
@@ -469,7 +533,9 @@ def tags() -> None:
     """List all tags and their repos."""
     all_tags = list_tags()
     if not all_tags:
-        console.print("[yellow]No tags created yet. Use 'gitshelf tag' to add some.[/yellow]")
+        console.print(
+            "[yellow]No tags created yet. Use 'gitshelf tag' to add some.[/yellow]"
+        )
         return
 
     table = Table(title="🏷️ Tags", box=box.ROUNDED)
@@ -485,7 +551,9 @@ def tags() -> None:
 
 @main.command()
 @click.argument("query")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def search(ctx: click.Context, query: str, json_flag: bool) -> None:
     """Search repos by name, tag, or path."""
@@ -514,8 +582,12 @@ def search(ctx: click.Context, query: str, json_flag: bool) -> None:
 
 
 @main.command()
-@click.option("--days", default=90, help="Days of inactivity to consider a branch stale.")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--days", default=90, help="Days of inactivity to consider a branch stale."
+)
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def prune(ctx: click.Context, days: int, json_flag: bool) -> None:
     """Show repos with stale branches that could be cleaned up."""
@@ -536,11 +608,13 @@ def prune(ctx: click.Context, days: int, json_flag: bool) -> None:
             continue
         stale_branches = get_stale_branches(info["path"], days=days)
         if stale_branches:
-            prune_repos.append({
-                "name": name,
-                "path": info["path"],
-                "stale_branches": stale_branches,
-            })
+            prune_repos.append(
+                {
+                    "name": name,
+                    "path": info["path"],
+                    "stale_branches": stale_branches,
+                }
+            )
 
     if use_json:
         click.echo(json.dumps(prune_repos, indent=2, default=str))
@@ -560,7 +634,9 @@ def prune(ctx: click.Context, days: int, json_flag: bool) -> None:
 
 
 @main.command()
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def sizes(ctx: click.Context, json_flag: bool) -> None:
     """Show repos sorted by disk size (largest first)."""
@@ -577,7 +653,9 @@ def sizes(ctx: click.Context, json_flag: bool) -> None:
     for name, info in repos.items():
         if is_git_repo(info["path"]):
             size = get_repo_size(info["path"])
-            repo_sizes.append({"name": name, "size_bytes": size, "size_human": _format_size(size)})
+            repo_sizes.append(
+                {"name": name, "size_bytes": size, "size_human": _format_size(size)}
+            )
 
     repo_sizes.sort(key=lambda x: x["size_bytes"], reverse=True)
 
@@ -598,8 +676,14 @@ def sizes(ctx: click.Context, json_flag: bool) -> None:
 
 
 @main.command()
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
-@click.option("--fix-paths", is_flag=True, help="Attempt to fix broken paths by re-scanning parent dirs.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
+@click.option(
+    "--fix-paths",
+    is_flag=True,
+    help="Attempt to fix broken paths by re-scanning parent dirs.",
+)
 @click.pass_context
 def sync(ctx: click.Context, json_flag: bool, fix_paths: bool) -> None:
     """Verify tracked repos still exist on disk and update metadata."""
@@ -625,7 +709,14 @@ def sync(ctx: click.Context, json_flag: bool, fix_paths: bool) -> None:
             old_remote = info.get("remote_url")
             if new_remote != old_remote:
                 update_repo_remote(name, new_remote)
-                updated.append({"name": name, "field": "remote_url", "old": old_remote, "new": new_remote})
+                updated.append(
+                    {
+                        "name": name,
+                        "field": "remote_url",
+                        "old": old_remote,
+                        "new": new_remote,
+                    }
+                )
         else:
             missing.append({"name": name, "path": path})
 
@@ -640,7 +731,14 @@ def sync(ctx: click.Context, json_flag: bool, fix_paths: bool) -> None:
                         new_remote = get_remote_url(r["path"])
                         if new_remote != get_repo(m["name"]).get("remote_url"):
                             update_repo_remote(m["name"], new_remote)
-                        updated.append({"name": m["name"], "field": "path", "old": m["path"], "new": r["path"]})
+                        updated.append(
+                            {
+                                "name": m["name"],
+                                "field": "path",
+                                "old": m["path"],
+                                "new": r["path"],
+                            }
+                        )
                         missing = [x for x in missing if x["name"] != m["name"]]
                         ok_count += 1
                         break
@@ -666,14 +764,20 @@ def sync(ctx: click.Context, json_flag: bool, fix_paths: bool) -> None:
 
     if updated:
         for u in updated:
-            console.print(f"[yellow]↻ Updated {u['name']}: {u['field']} changed[/yellow]")
+            console.print(
+                f"[yellow]↻ Updated {u['name']}: {u['field']} changed[/yellow]"
+            )
 
-    console.print(f"[green]✓ Synced: {ok_count} ok, {len(missing)} missing, {len(updated)} updated[/green]")
+    console.print(
+        f"[green]✓ Synced: {ok_count} ok, {len(missing)} missing, {len(updated)} updated[/green]"
+    )
 
 
 @main.command()
 @click.argument("name")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def archive(ctx: click.Context, name: str, json_flag: bool) -> None:
     """Mark a repo as archived (hidden from normal list)."""
@@ -694,7 +798,9 @@ def archive(ctx: click.Context, name: str, json_flag: bool) -> None:
 
 @main.command()
 @click.argument("name")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def unarchive(ctx: click.Context, name: str, json_flag: bool) -> None:
     """Unmark a repo as archived."""
@@ -715,10 +821,14 @@ def unarchive(ctx: click.Context, name: str, json_flag: bool) -> None:
 
 @main.command("ignore")
 @click.argument("pattern", required=False)
-@click.option("--remove", "-r", is_flag=True, help="Remove the pattern instead of adding it.")
+@click.option(
+    "--remove", "-r", is_flag=True, help="Remove the pattern instead of adding it."
+)
 @click.option("--list", "list_all", is_flag=True, help="List all ignore patterns.")
 @click.pass_context
-def ignore_cmd(ctx: click.Context, pattern: str | None, remove: bool, list_all: bool) -> None:
+def ignore_cmd(
+    ctx: click.Context, pattern: str | None, remove: bool, list_all: bool
+) -> None:
     """Add, remove, or list ignore patterns for scan (fnmatch-style)."""
     if list_all:
         patterns = list_ignore_patterns()
@@ -752,7 +862,9 @@ def ignore_cmd(ctx: click.Context, pattern: str | None, remove: bool, list_all: 
 @click.option("--delete", "-d", is_flag=True, help="Delete the note for this repo.")
 @click.option("--show", "-s", is_flag=True, help="Show the note for this repo.")
 @click.pass_context
-def note_cmd(ctx: click.Context, name: str, text: str | None, delete: bool, show: bool) -> None:
+def note_cmd(
+    ctx: click.Context, name: str, text: str | None, delete: bool, show: bool
+) -> None:
     """Add, view, or delete a note for a repo."""
     if delete:
         if remove_note(name):
@@ -779,9 +891,12 @@ def note_cmd(ctx: click.Context, name: str, text: str | None, delete: bool, show
     else:
         # Open editor if no text given
         import tempfile
+
         existing = get_note(name) or ""
         editor = os.environ.get("EDITOR", "nano")
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, prefix=f"gitshelf-note-{name}-") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False, prefix=f"gitshelf-note-{name}-"
+        ) as f:
             f.write(existing)
             tmppath = f.name
         try:
@@ -802,7 +917,9 @@ def note_cmd(ctx: click.Context, name: str, text: str | None, delete: bool, show
 
 
 @main.command("notes")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def notes_cmd(ctx: click.Context, json_flag: bool) -> None:
     """List all repos with notes."""
@@ -812,7 +929,9 @@ def notes_cmd(ctx: click.Context, json_flag: bool) -> None:
         if use_json:
             click.echo(json.dumps({}))
         else:
-            console.print("[yellow]No notes set. Use 'gitshelf note' to add some.[/yellow]")
+            console.print(
+                "[yellow]No notes set. Use 'gitshelf note' to add some.[/yellow]"
+            )
         return
 
     if use_json:
@@ -832,7 +951,9 @@ def notes_cmd(ctx: click.Context, json_flag: bool) -> None:
 @main.command()
 @click.argument("directory")
 @click.option("--deep", is_flag=True, help="Scan two levels deep.")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def reconcile(ctx: click.Context, directory: str, deep: bool, json_flag: bool) -> None:
     """Find untracked repos on disk and tracked repos missing from disk."""
@@ -873,7 +994,9 @@ def reconcile(ctx: click.Context, directory: str, deep: bool, json_flag: bool) -
         return
 
     if untracked:
-        table = Table(title="🔍 Untracked Repos (on disk but not tracked)", box=box.ROUNDED)
+        table = Table(
+            title="🔍 Untracked Repos (on disk but not tracked)", box=box.ROUNDED
+        )
         table.add_column("Name", style="cyan")
         table.add_column("Path", style="dim")
         for r in untracked:
@@ -895,7 +1018,9 @@ def reconcile(ctx: click.Context, directory: str, deep: bool, json_flag: bool) -
 @main.command("log")
 @click.argument("name")
 @click.option("--count", "-n", default=5, help="Number of commits to show.")
-@click.option("--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON.")
+@click.option(
+    "--json-output", "--json", "json_flag", is_flag=True, help="Output as JSON."
+)
 @click.pass_context
 def log_cmd(ctx: click.Context, name: str, count: int, json_flag: bool) -> None:
     """Show recent commits for a repo."""

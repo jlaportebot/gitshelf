@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from gitshelf.cli import main
-from gitshelf.db import add_repo, _load, _save, archive_repo, set_note
+from gitshelf.db import add_repo, _save, archive_repo, set_note
 
 
 @pytest.fixture
@@ -25,22 +25,29 @@ def runner():
 def git_repo(tmp_path):
     """Create a minimal git repo for CLI testing."""
     import subprocess
+
     repo = tmp_path / "myproject"
     repo.mkdir()
     subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     (repo / "README.md").write_text("# My Project")
     subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True, check=True)
     subprocess.run(
         ["git", "commit", "-m", "init"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     return str(repo)
 
@@ -77,6 +84,7 @@ def test_scan_with_ignore(runner, git_repo, db_path):
     parent = str(Path(git_repo).parent)
     # Add ignore pattern for "myproject"
     from gitshelf.db import add_ignore_pattern
+
     add_ignore_pattern("myproject", db_path)
     result = runner.invoke(main, ["scan", parent], env=_env_db(db_path))
     assert result.exit_code == 0
@@ -98,7 +106,16 @@ def test_list_json(runner, db_path):
 
 def test_list_with_repos(runner, db_path):
     data = {
-        "repos": {"test-repo": {"path": "/tmp/test", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": [], "archived": False}},
+        "repos": {
+            "test-repo": {
+                "path": "/tmp/test",
+                "remote_url": None,
+                "added_at": "2026-01-01",
+                "last_accessed": "2026-01-01",
+                "tags": [],
+                "archived": False,
+            }
+        },
         "tags": {},
     }
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -111,8 +128,22 @@ def test_list_with_repos(runner, db_path):
 def test_list_archived_only(runner, db_path):
     data = {
         "repos": {
-            "active": {"path": "/tmp/active", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": [], "archived": False},
-            "old": {"path": "/tmp/old", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": [], "archived": True},
+            "active": {
+                "path": "/tmp/active",
+                "remote_url": None,
+                "added_at": "2026-01-01",
+                "last_accessed": "2026-01-01",
+                "tags": [],
+                "archived": False,
+            },
+            "old": {
+                "path": "/tmp/old",
+                "remote_url": None,
+                "added_at": "2026-01-01",
+                "last_accessed": "2026-01-01",
+                "tags": [],
+                "archived": True,
+            },
         },
         "tags": {},
     }
@@ -124,7 +155,19 @@ def test_list_archived_only(runner, db_path):
 
 
 def test_untrack(runner, db_path):
-    data = {"repos": {"test": {"path": "/tmp/test", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": [], "archived": False}}, "tags": {}}
+    data = {
+        "repos": {
+            "test": {
+                "path": "/tmp/test",
+                "remote_url": None,
+                "added_at": "2026-01-01",
+                "last_accessed": "2026-01-01",
+                "tags": [],
+                "archived": False,
+            }
+        },
+        "tags": {},
+    }
     db_path.parent.mkdir(parents=True, exist_ok=True)
     _save(data, db_path)
     result = runner.invoke(main, ["untrack", "test"], env=_env_db(db_path))
@@ -185,7 +228,16 @@ def test_search_no_results(runner, db_path):
 
 def test_search_json(runner, db_path):
     data = {
-        "repos": {"my-repo": {"path": "/tmp/my", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": ["python"], "archived": False}},
+        "repos": {
+            "my-repo": {
+                "path": "/tmp/my",
+                "remote_url": None,
+                "added_at": "2026-01-01",
+                "last_accessed": "2026-01-01",
+                "tags": ["python"],
+                "archived": False,
+            }
+        },
         "tags": {"python": ["my-repo"]},
     }
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,7 +251,16 @@ def test_search_json(runner, db_path):
 
 def test_untag_command(runner, db_path):
     data = {
-        "repos": {"r": {"path": "/tmp/r", "remote_url": None, "added_at": "2026-01-01", "last_accessed": "2026-01-01", "tags": ["work"], "archived": False}},
+        "repos": {
+            "r": {
+                "path": "/tmp/r",
+                "remote_url": None,
+                "added_at": "2026-01-01",
+                "last_accessed": "2026-01-01",
+                "tags": ["work"],
+                "archived": False,
+            }
+        },
         "tags": {"work": ["r"]},
     }
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -285,6 +346,7 @@ def test_ignore_add(runner, db_path):
 
 def test_ignore_list(runner, db_path):
     from gitshelf.db import add_ignore_pattern
+
     add_ignore_pattern("dotfiles", db_path)
     result = runner.invoke(main, ["ignore", "--list"], env=_env_db(db_path))
     assert result.exit_code == 0
@@ -299,6 +361,7 @@ def test_ignore_list_empty(runner, db_path):
 
 def test_ignore_remove(runner, db_path):
     from gitshelf.db import add_ignore_pattern
+
     add_ignore_pattern("temp", db_path)
     result = runner.invoke(main, ["ignore", "temp", "--remove"], env=_env_db(db_path))
     assert result.exit_code == 0

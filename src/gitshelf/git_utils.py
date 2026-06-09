@@ -101,9 +101,7 @@ def get_stale_branches(repo_path: str, days: int = 90) -> list[dict[str, Any]]:
     branches = get_local_branches(repo_path)
     stale = []
     for branch in branches:
-        date_str = _run_git(
-            ["log", "-1", f"--format=%cI", branch], repo_path
-        )
+        date_str = _run_git(["log", "-1", "--format=%cI", branch], repo_path)
         if date_str:
             try:
                 last_date = datetime.fromisoformat(date_str)
@@ -141,19 +139,19 @@ def get_commit_count(repo_path: str) -> int:
 
 def get_contributors(repo_path: str) -> list[dict[str, Any]]:
     """Get top contributors by commit count."""
-    result = _run_git(
-        ["shortlog", "-sn", "HEAD"], repo_path
-    )
+    result = _run_git(["shortlog", "-sn", "HEAD"], repo_path)
     if result is None:
         return []
     contributors = []
     for line in result.splitlines():
         parts = line.strip().split("\t", 1)
         if len(parts) == 2:
-            contributors.append({
-                "name": parts[1],
-                "commits": int(parts[0]),
-            })
+            contributors.append(
+                {
+                    "name": parts[1],
+                    "commits": int(parts[0]),
+                }
+            )
     return contributors
 
 
@@ -280,12 +278,14 @@ def get_recent_commits(repo_path: str, count: int = 5) -> list[dict[str, str]]:
     for line in result.splitlines():
         parts = line.split("|", 3)
         if len(parts) == 4:
-            commits.append({
-                "hash": parts[0],
-                "author": parts[1],
-                "date": parts[2],
-                "subject": parts[3],
-            })
+            commits.append(
+                {
+                    "hash": parts[0],
+                    "author": parts[1],
+                    "date": parts[2],
+                    "subject": parts[3],
+                }
+            )
     return commits
 
 
@@ -306,8 +306,8 @@ def has_diverged(repo_path: str) -> bool:
     if upstream is None:
         return False
     # Check for both ahead and behind
-    ahead = _run_git(["rev-list", "--count", f"@{{upstream}}..HEAD"], repo_path)
-    behind = _run_git(["rev-list", "--count", f"HEAD..@{{upstream}}"], repo_path)
+    ahead = _run_git(["rev-list", "--count", "@{upstream}..HEAD"], repo_path)
+    behind = _run_git(["rev-list", "--count", "HEAD..@{upstream}"], repo_path)
     try:
         return int(ahead or "0") > 0 and int(behind or "0") > 0
     except ValueError:

@@ -8,7 +8,6 @@ import pytest
 from gitshelf.git_utils import (
     is_git_repo,
     get_current_branch,
-    get_remote_url,
     has_uncommitted_changes,
     has_unpushed_commits,
     get_last_commit_date,
@@ -38,18 +37,24 @@ def git_repo(tmp_path):
     subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     # Create an initial commit so HEAD is valid
     (repo / "README.md").write_text("# Test")
     subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True, check=True)
     subprocess.run(
         ["git", "commit", "-m", "init"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     return str(repo)
 
@@ -62,18 +67,26 @@ def git_repo_multi_commit(tmp_path):
     subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     for i in range(3):
         (repo / f"file{i}.txt").write_text(f"content {i}")
-        subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=str(repo), capture_output=True, check=True
+        )
         subprocess.run(
             ["git", "commit", "-m", f"commit {i}"],
-            cwd=str(repo), capture_output=True, check=True,
+            cwd=str(repo),
+            capture_output=True,
+            check=True,
         )
     return str(repo)
 
@@ -198,17 +211,23 @@ def test_scan_directory_deep(tmp_path):
     subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, check=True)
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
     (repo / "README.md").write_text("# Nested")
     subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True, check=True)
     subprocess.run(
         ["git", "commit", "-m", "init"],
-        cwd=str(repo), capture_output=True, check=True,
+        cwd=str(repo),
+        capture_output=True,
+        check=True,
     )
 
     # Shallow scan should not find it

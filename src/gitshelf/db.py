@@ -160,6 +160,7 @@ def search_repos(query: str, db_path: Path | None = None) -> list[dict[str, Any]
 
 # --- Ignore patterns ---
 
+
 def add_ignore_pattern(pattern: str, db_path: Path | None = None) -> None:
     """Add a name pattern to the ignore list (glob-style)."""
     data = _load(db_path)
@@ -189,11 +190,13 @@ def list_ignore_patterns(db_path: Path | None = None) -> list[str]:
 def is_ignored(name: str, db_path: Path | None = None) -> bool:
     """Check if a repo name matches any ignore pattern (fnmatch)."""
     import fnmatch
+
     patterns = list_ignore_patterns(db_path)
     return any(fnmatch.fnmatch(name, p) for p in patterns)
 
 
 # --- Notes ---
+
 
 def set_note(name: str, note: str, db_path: Path | None = None) -> None:
     """Set a note for a repo."""
@@ -229,6 +232,7 @@ def list_notes(db_path: Path | None = None) -> dict[str, str]:
 
 # --- Archive ---
 
+
 def archive_repo(name: str, db_path: Path | None = None) -> None:
     """Mark a repo as archived."""
     data = _load(db_path)
@@ -249,6 +253,7 @@ def unarchive_repo(name: str, db_path: Path | None = None) -> None:
 
 # --- Sync / Reconcile helpers ---
 
+
 def update_repo_path(name: str, new_path: str, db_path: Path | None = None) -> None:
     """Update the path for a tracked repo."""
     data = _load(db_path)
@@ -258,7 +263,9 @@ def update_repo_path(name: str, new_path: str, db_path: Path | None = None) -> N
     _save(data, db_path)
 
 
-def update_repo_remote(name: str, remote_url: str | None, db_path: Path | None = None) -> None:
+def update_repo_remote(
+    name: str, remote_url: str | None, db_path: Path | None = None
+) -> None:
     """Update the remote URL for a tracked repo."""
     data = _load(db_path)
     if name not in data["repos"]:
