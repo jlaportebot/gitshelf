@@ -68,7 +68,11 @@ def get_last_commit_date(repo_path: str) -> datetime | None:
         try:
             return datetime.fromisoformat(date_str)
         except (ValueError, TypeError):
-            pass
+            # Fallback for Python 3.10 compatibility
+            try:
+                return datetime.strptime(date_str[:19], "%Y-%m-%dT%H:%M:%S")
+            except (ValueError, TypeError):
+                pass
     return None
 
 
@@ -105,11 +109,14 @@ def get_stale_branches(repo_path: str, days: int = 90) -> list[dict[str, Any]]:
         if date_str:
             try:
                 last_date = datetime.fromisoformat(date_str)
-                days_idle = (datetime.now(last_date.tzinfo) - last_date).days
-                if days_idle > days:
-                    stale.append({"branch": branch, "days_idle": days_idle})
             except (ValueError, TypeError):
-                pass
+                try:
+                    last_date = datetime.strptime(date_str[:19], "%Y-%m-%dT%H:%M:%S")
+                except (ValueError, TypeError):
+                    continue
+            days_idle = (datetime.now(last_date.tzinfo) - last_date).days
+            if days_idle > days:
+                stale.append({"branch": branch, "days_idle": days_idle})
     return stale
 
 
