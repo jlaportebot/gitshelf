@@ -61,19 +61,34 @@ def has_unpushed_commits(repo_path: str) -> bool:
     return unpushed is not None and len(unpushed) > 0
 
 
+def _parse_git_date(date_str: str | None) -> datetime | None:
+    """Parse git ISO 8601 date string, handling Python 3.10's limited fromisoformat."""
+    if not date_str:
+        return None
+    # Python 3.10's fromisoformat doesn't support timezone with colon (+00:00)
+    # Normalize timezone to +0000 format for compatibility
+    normalized = date_str
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    if "+" in normalized and normalized.count(":") == 3:
+        # Has timezone with colon, e.g., 2026-06-11T10:30:00+00:00
+        # Remove colon from timezone for Python 3.10 compatibility
+        normalized = normalized[:-3] + normalized[-2:]
+    try:
+        return datetime.fromisoformat(normalized)
+    except (ValueError, TypeError):
+        # Final fallback: parse without timezone
+        try:
+            return datetime.strptime(date_str[:19], "%Y-%m-%dT%H:%M:%S")
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
 def get_last_commit_date(repo_path: str) -> datetime | None:
     """Get the date of the most recent commit."""
     date_str = _run_git(["log", "-1", "--format=%cI"], repo_path)
-    if date_str:
-        try:
-            return datetime.fromisoformat(date_str)
-        except (ValueError, TypeError):
-            # Fallback for Python 3.10 compatibility
-            try:
-                return datetime.strptime(date_str[:19], "%Y-%m-%dT%H:%M:%S")
-            except (ValueError, TypeError):
-                pass
-    return None
+    return _parse_git_date(date_str)
 
 
 def get_stash_count(repo_path: str) -> int:
@@ -106,14 +121,8 @@ def get_stale_branches(repo_path: str, days: int = 90) -> list[dict[str, Any]]:
     stale = []
     for branch in branches:
         date_str = _run_git(["log", "-1", "--format=%cI", branch], repo_path)
-        if date_str:
-            try:
-                last_date = datetime.fromisoformat(date_str)
-            except (ValueError, TypeError):
-                try:
-                    last_date = datetime.strptime(date_str[:19], "%Y-%m-%dT%H:%M:%S")
-                except (ValueError, TypeError):
-                    continue
+        last_date = _parse_git_date(date_str)
+        if last_date:
             days_idle = (datetime.now(last_date.tzinfo) - last_date).days
             if days_idle > days:
                 stale.append({"branch": branch, "days_idle": days_idle})
