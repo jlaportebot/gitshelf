@@ -20,9 +20,7 @@ Developers accumulate dozens of cloned repos. `gitshelf` helps you:
 pip install gitshelf
 ```
 
-## Usage
-
-### Scanning & Tracking
+## Quick Start
 
 ```bash
 # Scan a directory for git repos
